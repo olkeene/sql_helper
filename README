@@ -1,0 +1,54 @@
+= Sql Helper
+
+This is a small set of low-level helper methods for building and combining
+standard ActiveRecord conditions of the form
+    ["sql where clause", bindvar1, bindvar2, ...]
+
+It helps you build more complex conditions by combining simpler conditions
+with AND and OR. It also takes care of writing "IS NULL" conditions when
+required, and can also build conditions to locate IP addresses within subnet
+prefixes or vice versa.
+
+A few simple examples:
+
+  Sql.eq("foo", 123)
+  # => ["foo=?", 123]
+
+  Sql.eq("foo", nil)
+  Sql.eq("foo", "")
+  # => ["foo IS NULL"]
+
+  data = [123, 456, 789]
+  Sql.in("foo", data)
+  # => ["foo IN (?,?,?)", 123, 456, 789]
+
+  Sql.in("foo", [123, nil, 456])
+  # => ["foo IN (?,?) OR foo IS NULL", 123, 456]
+
+  Sql.and(
+    Sql.eq(:foo, 123),
+    ["bar=?", 456],
+    ["baz=?", 789]
+  )
+  # => ["(foo=?) AND (bar=?) AND (baz=?)", 123, 456, 789]
+
+  Sql.find("addr", "abc%")
+  # => ["addr LIKE ?", "abc%"]
+
+  Sql.find("addr", "192.168.0.0/30") 
+  # => ["addr in (?,?,?,?,?)", "192.168.0.0/30", "192.168.0.0",
+        "192.168.0.1", "192.168.0.2", "192.168.0.3"]
+
+There are also conditions which end with a question-mark, like Sql.eq?.
+These return nil (instead of a SQL condition) if the matched value is nil or
+empty string, so the condition is skipped entirely. Example:
+
+  @customers = Customer.find(:all, :conditions => Sql.and(
+	Sql.find?("name", params[:name]),
+	Sql.find?("postcode", params[:postcode]),
+	Sql.find?("ip", params[:ip])
+  ))
+
+Here, each of the conditions may be given or omitted. If none are given, the
+entire Sql.and() expression evaluates to nil, and so all customers are
+found.
